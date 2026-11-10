@@ -1,6 +1,6 @@
 // ตั้งค่ากลางของทุกหน้า — แก้ URL ที่นี่ที่เดียว
 // นำ URL ของ Web App (Apps Script > Deploy > Web app ลงท้ายด้วย /exec) มาวางแทน
-const API_URL = "https://script.google.com/macros/s/AKfycbwK8EsWMDFU_ll3Sdj9GvuAuTu2T-GThjCC3eMDvluy9f0ZB3aOF7bujP3VMwjB6ZZf/exec";
+const API_URL = "https://script.google.com/macros/s/AKfycbxrJeY6drhz5RVjS9lMhyXQK91enUgEZraEgIQuJkSmv6QsTdZSM-FZHErbAdkJb4Q/exec";
 
 // เรียกคำสั่งไปที่ Google Sheet (ผ่าน Apps Script)
 // ส่งเป็น text/plain เพื่อไม่ให้เบราว์เซอร์ติด CORS preflight และอ่านผลลัพธ์กลับมาได้
