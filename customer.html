@@ -176,9 +176,10 @@
 <!-- ========================================== -->
 <div class="mb-4 px-2">
   <input 
-    type="text" 
+    type="search" 
+    autocomplete="off" 
     id="searchMenuInput" 
-    oninput="filterMenu()" 
+    oninput="filterMenu()" onsearch="filterMenu()" 
     placeholder="🔍 ค้นหาเมนูอาหาร..." 
     class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
   >
@@ -189,26 +190,11 @@
 <!-- 2. โค้ด JavaScript สำหรับกรองเมนูแบบเรียลไทม์ (นำไปวางไว้ในแท็บ <script> ของหน้าเว็บ) -->
 <!-- ========================================== -->
 <script>
-  // ฟังก์ชันค้นหาและกรองเมนูอาหารทันทีที่พิมพ์
+  // ค้นหาเมนูตามชื่อ/หมวดหมู่ทันทีที่พิมพ์ (ทำงานร่วมกับ renderProducts)
+  let searchQuery = '';
   function filterMenu() {
-    var input = document.getElementById('searchMenuInput');
-    var filter = input.value.toLowerCase().trim();
-    
-    // ดึงการ์ดเมนูทั้งหมดที่มีคลาส menu-item หรืออยู่ในโครงสร้างตาราง
-    var menuItems = document.querySelectorAll('.menu-item, #menuContainer > div, [data-name]');
-    
-    menuItems.forEach(function(item) {
-      // ดึงข้อความและชื่อจาก data-name
-      var text = item.innerText.toLowerCase();
-      var dataName = (item.getAttribute('data-name') || "").toLowerCase();
-      
-      // ถ้าคำที่พิมพ์ตรงกับชื่อเมนูหรือข้อความในการ์ด ให้แสดงผล ถ้าไม่ตรงให้ซ่อน
-      if (text.indexOf(filter) > -1 || dataName.indexOf(filter) > -1) {
-        item.style.display = ""; // แสดงการ์ด
-      } else {
-        item.style.display = "none"; // ซ่อนการ์ด
-      }
-    });
+    searchQuery = document.getElementById('searchMenuInput').value.toLowerCase().replace(/\s+/g, ' ').trim();
+    renderProducts();
   }
 </script>
     <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="product-grid"></div>
@@ -626,16 +612,22 @@
 
     function filterCategory(cat) { 
       activeCat = cat; 
+      searchQuery = '';
+      const si = document.getElementById('searchMenuInput'); if (si) si.value = '';
       renderCategories();
       renderProducts();
     }
 
     function renderProducts() {
       const grid = document.getElementById('product-grid');
-      const list = activeCat === 'ทั้งหมด' ? products : products.filter(p => p.category === activeCat);
+      const q = (typeof searchQuery === 'string') ? searchQuery : '';
+      const list = q
+        ? products.filter(p => (String(p.name || '') + ' ' + String(p.category || '')).toLowerCase().includes(q))
+        : (activeCat === 'ทั้งหมด' ? products : products.filter(p => p.category === activeCat));
       
       if (list.length === 0) {
-        grid.innerHTML = `<p class="col-span-3 text-center text-xs text-gray-400 py-8">ยังไม่มีรายการเมนู</p>`;
+        const msg = q ? 'ไม่พบเมนูที่ค้นหา ลองพิมพ์คำอื่นดูนะครับ' : 'ยังไม่มีรายการเมนู';
+        grid.innerHTML = `<p class="col-span-full text-center text-xs text-gray-400 py-8">${msg}</p>`;
         return;
       }
 
