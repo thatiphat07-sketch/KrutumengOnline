@@ -377,7 +377,8 @@
         
         // 2.1 โหลดเมนู
         if (data.menu && data.menu.length > 0) {
-          products = data.menu;
+          // บังคับราคาเป็นตัวเลขเสมอ (กันกรณีในชีตเป็นข้อความ เช่น "50 บาท" หรือไม่มีค่า)
+          products = data.menu.map(p => ({ ...p, price: Number(String(p.price == null ? '' : p.price).replace(/[^0-9.]/g, '')) || 0 }));
           // สร้างหมวดหมู่อัตโนมัติจากที่มีในเมนู 
           const uniqueCats = new Set(["ทั้งหมด"]);
           products.forEach(p => { if(p.category) uniqueCats.add(p.category); });
@@ -390,6 +391,8 @@
           if (billConfig.shopName) document.getElementById('shop-header-title').innerText = billConfig.shopName;
           if (billConfig.logo) document.getElementById('shop-logo-box').innerHTML = `<img src="${billConfig.logo}" class="w-full h-full object-cover">`;
         }
+
+        if (products.length) restoreCart();
 
         // 2.3 สั่งวาดเมนูและหมวดหมู่ขึ้นหน้าจอ
         renderCategories();
@@ -646,7 +649,7 @@
             </div>
             <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
               <span class="font-bold text-orange-600 text-xs">฿${p.price}</span>
-              <button onclick="addToCart(${p.id})" class="bg-orange-600 hover:bg-orange-700 text-white text-[11px] px-2.5 py-1 rounded-lg font-medium shadow-sm transition">+ เพิ่ม</button>
+              <button onclick="addToCart('${p.id}')" class="bg-orange-600 hover:bg-orange-700 text-white text-[11px] px-2.5 py-1 rounded-lg font-medium shadow-sm transition">+ เพิ่ม</button>
             </div>
           </div>
         `;
@@ -660,15 +663,34 @@
         openAuthModal();
         return;
       }
-      const p = products.find(x => x.id === id);
-      const ex = cart.find(x => x.id === id);
+      id = String(id);
+      const p = products.find(x => String(x.id) === id);
+      if (!p) return alert('ไม่พบเมนูนี้ กรุณารีเฟรชหน้าเว็บ');
+      const ex = cart.find(x => String(x.id) === id);
       if(ex) ex.qty++; else cart.push({...p, qty: 1});
       updateCartUI();
     }
 
+    // 💾 จำตะกร้าไว้ในเครื่อง รีเฟรชแล้วไม่หาย (เก็บเฉพาะรหัสเมนูกับจำนวน ราคาดึงใหม่จากชีตเสมอ)
+    function saveCart() {
+      try { localStorage.setItem('pos_cart', JSON.stringify(cart.map(c => ({ id: String(c.id), qty: c.qty })))); } catch (e) {}
+    }
+    function restoreCart() {
+      try {
+        const saved = JSON.parse(localStorage.getItem('pos_cart') || '[]');
+        cart = saved.map(sv => {
+          const p = products.find(x => String(x.id) === String(sv.id));
+          const qty = Math.floor(Number(sv.qty));
+          return p && qty > 0 ? { ...p, qty: Math.min(qty, 99) } : null;   // เมนูที่ถูกลบออกจะหลุดจากตะกร้าเอง
+        }).filter(Boolean);
+      } catch (e) { cart = []; }
+      updateCartUI();
+    }
+
     function updateCartUI() {
+      saveCart();
       const qty = cart.reduce((a,b)=>a+b.qty, 0);
-      const total = cart.reduce((a,b)=>a+(b.price*b.qty), 0);
+      const total = cart.reduce((a,b)=>a+((Number(b.price)||0)*(Number(b.qty)||0)), 0);
       document.getElementById('bottom-bar').classList.toggle('hidden', qty === 0);
       document.getElementById('cart-badge').classList.toggle('hidden', qty === 0);
       document.getElementById('cart-badge').innerText = qty;
@@ -680,20 +702,21 @@
         <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
           <div>
             <p class="font-semibold text-xs text-gray-800">${item.name}</p>
-            <p class="text-xs text-orange-600 font-bold">฿${item.price * item.qty}</p>
+            <p class="text-xs text-orange-600 font-bold">฿${(Number(item.price)||0) * (Number(item.qty)||0)}</p>
           </div>
           <div class="flex items-center space-x-2">
-            <button onclick="changeQty(${item.id}, -1)" class="w-6 h-6 bg-white border border-gray-300 rounded-lg text-xs font-bold">-</button>
+            <button onclick="changeQty('${item.id}', -1)" class="w-6 h-6 bg-white border border-gray-300 rounded-lg text-xs font-bold">-</button>
             <span class="text-xs font-bold w-4 text-center">${item.qty}</span>
-            <button onclick="changeQty(${item.id}, 1)" class="w-6 h-6 bg-orange-600 text-white rounded-lg text-xs font-bold">+</button>
+            <button onclick="changeQty('${item.id}', 1)" class="w-6 h-6 bg-orange-600 text-white rounded-lg text-xs font-bold">+</button>
           </div>
         </div>
       `).join('');
     }
 
     function changeQty(id, delta) {
-      const item = cart.find(i => i.id === id);
-      if(item) { item.qty += delta; if(item.qty <= 0) cart = cart.filter(i => i.id !== id); }
+      id = String(id);
+      const item = cart.find(i => String(i.id) === id);
+      if(item) { item.qty += delta; if(item.qty <= 0) cart = cart.filter(i => String(i.id) !== id); }
       updateCartUI();
     }
 
