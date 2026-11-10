@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rider Delivery App - ร้าน กรูตำเอง</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap');
+    body { font-family: 'Prompt', sans-serif; background-color: #f1f5f9; }
+  </style>
+</head>
+<body class="text-gray-800">
+
+  <script src="config.js"></script>
+
+  <header class="bg-blue-600 text-white shadow-md p-4 sticky top-0 z-50 flex justify-between items-center">
+    <div class="flex items-center gap-2 font-bold text-lg">
+      <i class="fa-solid fa-motorcycle text-xl"></i> ไรเดอร์ ระบบจัดส่ง
+    </div>
+    <button onclick="fetchJobs()" class="text-xs bg-white/20 px-3 py-1.5 rounded-lg active:scale-95 transition">
+      <i class="fa-solid fa-rotate"></i> รีเฟรช
+    </button>
+  </header>
+
+  <!-- เข้าสู่ระบบไรเดอร์ (PIN ตรวจที่เซิร์ฟเวอร์) -->
+  <div id="rider-login" class="fixed inset-0 bg-slate-900/90 z-[60] flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl w-full max-w-xs p-6 space-y-3 shadow-xl text-center">
+      <div class="text-3xl text-blue-600"><i class="fa-solid fa-motorcycle"></i></div>
+      <h2 class="font-bold text-gray-800">เข้าสู่ระบบไรเดอร์</h2>
+      <input type="password" id="rider-pin" placeholder="กรอก PIN" class="w-full text-center text-lg tracking-widest px-3 py-2.5 border rounded-xl font-bold outline-none focus:ring-2 focus:ring-blue-500" onkeydown="if(event.key==='Enter')riderLogin()">
+      <p id="rider-login-error" class="text-xs text-red-500 font-semibold hidden"></p>
+      <button onclick="riderLogin()" class="w-full bg-blue-600 text-white font-bold py-2.5 rounded-xl text-sm">เข้าสู่ระบบ</button>
+    </div>
+  </div>
+
+  <main class="p-4 space-y-4 max-w-md mx-auto" id="jobs-container">
+    <div class="text-center text-gray-500 py-10">
+      <i class="fa-solid fa-spinner animate-spin text-2xl text-blue-600"></i><br>กำลังค้นหางานจัดส่ง...
+    </div>
+  </main>
+
+  <!-- โมดอลยืนยันการจัดส่ง (ถ่ายรูปหลักฐาน) -->
+  <div id="delivery-modal" class="fixed inset-0 bg-black/80 z-50 hidden flex flex-col items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm p-5 space-y-4 shadow-xl">
+      <div class="text-center font-bold text-lg text-blue-600 border-b pb-2">ยืนยันการจัดส่ง</div>
+      <p class="text-xs text-gray-500 text-center">ออเดอร์: <span id="target-order-id" class="font-bold text-gray-800"></span></p>
+      
+      <div class="space-y-2">
+        <label class="block text-sm font-bold text-gray-700">
+          <i class="fa-solid fa-camera text-blue-600"></i> ถ่ายรูปหลักฐานการส่ง
+        </label>
+        <input type="file" id="camera-input" accept="image/*" capture="environment" onchange="previewPhoto(event)" class="w-full text-sm text-gray-500 file:mr-2 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+        
+        <div id="photo-preview-box" class="h-40 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex items-center justify-center overflow-hidden hidden">
+          <img id="photo-preview-img" src="" class="w-full h-full object-cover">
+        </div>
+      </div>
+      
+      <textarea id="rider-note" rows="2" placeholder="โน้ตเพิ่มเติม (เช่น วางไว้หน้าบ้าน)" class="w-full p-2 border rounded-xl text-xs outline-none focus:border-blue-500"></textarea>
+
+      <div class="flex gap-2 pt-2">
+        <button onclick="closeDeliveryModal()" class="flex-1 bg-gray-200 text-gray-700 font-bold py-3 rounded-xl text-sm">ยกเลิก</button>
+        <button onclick="submitDelivery()" id="btn-submit-delivery" class="flex-1 bg-blue-600 text-white font-bold py-3 rounded-xl shadow-lg text-sm transition disabled:opacity-50">ส่งงานเสร็จสิ้น</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let photoBase64Data = "";
+    let currentJobId = "";
+
+
+    function showRiderLogin() {
+      document.getElementById('rider-login').classList.remove('hidden');
+      document.getElementById('jobs-container').innerHTML = '';
+    }
+    async function riderLogin() {
+      const pin = document.getElementById('rider-pin').value.trim();
+      const err = document.getElementById('rider-login-error');
+      err.classList.add('hidden');
+      try {
+        const r = await apiCall('riderLogin', { pin });
+        sessionStorage.setItem('rider_token', r.token);
+        document.getElementById('rider-login').classList.add('hidden');
+        document.getElementById('rider-pin').value = '';
+        fetchJobs();
+      } catch (e) { err.innerText = e.message; err.classList.remove('hidden'); }
+    }
+
+    async function fetchJobs() {
+      const container = document.getElementById('jobs-container');
+      container.innerHTML = `<div class="text-center text-gray-500 py-10"><i class="fa-solid fa-spinner animate-spin text-2xl text-blue-600"></i><br>กำลังค้นหางานจัดส่ง...</div>`;
+
+      try {
+        const token = sessionStorage.getItem('rider_token');
+        if (!token) { showRiderLogin(); return; }
+        // เซิร์ฟเวอร์ส่งมาเฉพาะงานจัดส่งที่แอดมินกดสถานะ "กำลังขนส่ง" แล้ว
+        const orders = (await apiCall('getOrders', { token })).orders;
+        const deliveryJobs = orders;
+        
+        if (deliveryJobs.length === 0) {
+          container.innerHTML = `
+            <div class="bg-white p-6 rounded-2xl text-center shadow border text-gray-500 space-y-2">
+              <i class="fa-solid fa-box-open text-4xl text-gray-300"></i><br>
+              <p class="font-bold">ไม่มีงานจัดส่งในขณะนี้</p>
+              <p class="text-xs text-gray-400">งานจะขึ้นเมื่อแอดมินกดสถานะ "กำลังขนส่ง" ให้ออเดอร์จัดส่ง</p>
+            </div>`;
+          return;
+        }
+
+        container.innerHTML = deliveryJobs.map(job => {
+          let mapBtn = '';
+          const noteText = job.note || '';
+          const mapMatch = noteText.match(/(https:\/\/www\.google\.com\/maps\?q=[^\s|]+)/);
+          
+          if (mapMatch) {
+            mapBtn = `<a href="${mapMatch[0]}" target="_blank" class="w-full block text-center bg-green-100 text-green-700 font-bold py-2 rounded-xl text-xs mt-2 border border-green-200"><i class="fa-solid fa-map-location-dot"></i> เปิดนำทาง (Google Maps)</a>`;
+          }
+          
+          return `
+            <div class="bg-white p-4 rounded-2xl shadow-sm border border-blue-100 relative space-y-2">
+              <span class="absolute top-3 right-3 bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-1 rounded-lg">ยอดเก็บ: ฿${job.total || 0}</span>
+              <p class="font-bold text-blue-700">ออเดอร์: ${job.id}</p>
+              <p class="text-xs font-semibold text-gray-800"><i class="fa-solid fa-user"></i> ${job.customer || 'ไม่ระบุชื่อ'}</p>
+              <p class="text-xs text-gray-500 bg-gray-50 p-2 rounded-lg border"><strong>รายละเอียด:</strong> ${noteText}</p>
+              ${mapBtn}
+              <button onclick="openDeliveryModal('${job.id}')" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-md text-sm transition">
+                <i class="fa-solid fa-camera"></i> กดเพื่อส่งอาหาร & ถ่ายรูป
+              </button>
+            </div>
+          `;
+        }).join('');
+      } catch (e) {
+        console.error(e);
+        if (/เข้าสู่ระบบ/.test(e.message)) { sessionStorage.removeItem('rider_token'); showRiderLogin(); return; }
+        container.innerHTML = `<div class="text-red-500 text-center py-4 bg-white p-4 rounded-2xl shadow">โหลดข้อมูลล้มเหลว: ${e.message}</div>`;
+      }
+    }
+
+    function openDeliveryModal(orderId) {
+      currentJobId = orderId;
+      document.getElementById('target-order-id').innerText = orderId;
+      document.getElementById('delivery-modal').classList.remove('hidden');
+      document.getElementById('photo-preview-box').classList.add('hidden');
+      document.getElementById('camera-input').value = "";
+      photoBase64Data = "";
+    }
+
+    function closeDeliveryModal() { 
+      document.getElementById('delivery-modal').classList.add('hidden'); 
+    }
+
+    function previewPhoto(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            const canvas = document.createElement('canvas');
+            const max_size = 800;
+            let w = img.width; 
+            let h = img.height;
+            if (w > h) { if (w > max_size) { h *= max_size / w; w = max_size; } } 
+            else { if (h > max_size) { w *= max_size / h; h = max_size; } }
+            canvas.width = w; 
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, w, h);
+            
+            photoBase64Data = canvas.toDataURL('image/jpeg', 0.6);
+            document.getElementById('photo-preview-img').src = photoBase64Data;
+            document.getElementById('photo-preview-box').classList.remove('hidden');
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    async function submitDelivery() {
+      if (!photoBase64Data) return alert("กรุณาถ่ายรูปหรือเลือกรูปหลักฐานการจัดส่งก่อนครับ");
+      const btn = document.getElementById('btn-submit-delivery');
+      btn.innerText = "กำลังส่งข้อมูล..."; 
+      btn.disabled = true;
+
+      try {
+        await apiCall('riderComplete', {
+          token: sessionStorage.getItem('rider_token'), orderId: currentJobId,
+          photoBase64: photoBase64Data, riderNote: document.getElementById('rider-note').value
+        });
+        alert('จัดส่งเรียบร้อยแล้ว!');
+        closeDeliveryModal();
+        fetchJobs();
+      } catch(e) {
+        alert('เกิดข้อผิดพลาดในการอัปโหลดข้อมูล: ' + e.message);
+      } finally {
+        btn.innerText = "ส่งงานเสร็จสิ้น"; 
+        btn.disabled = false;
+      }
+    }
+
+    fetchJobs();
+  </script>
+</body>
+</html>

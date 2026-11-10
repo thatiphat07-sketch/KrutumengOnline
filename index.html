@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ร้านกรูตำเองส้มตำ ไก่ทอด หมูทอด ข้าวกระเพรา - สั่งอาหารออนไลน์</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Prompt', sans-serif; background-color: #FFFBEB; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between text-gray-800">
+
+  <!-- Header Section -->
+  <header class="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 text-white shadow-md py-4 px-6">
+    <div class="max-w-4xl mx-auto flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div id="shop-logo" class="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow overflow-hidden">
+          🌶️
+        </div>
+        <div>
+          <h1 class="font-bold text-lg md:text-xl leading-tight" id="shop-name-display">ร้านส้มตำ ไก่ทอด หมูทอด ข้าวกระเพรา</h1>
+          <p class="text-xs text-amber-100">แซ่บสดใหม่ สะอาด อร่อยจัดจ้านทุกจาน</p>
+        </div>
+      </div>
+      <span class="bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm">
+        <span class="w-2 h-2 rounded-full bg-white animate-ping"></span> เปิดให้บริการ
+      </span>
+    </div>
+  </header>
+
+  <!-- Main Portal Section -->
+  <main class="flex-1 max-w-4xl w-full mx-auto p-4 md:p-8 flex flex-col justify-center space-y-6">
+    
+    <!-- Hero Banner -->
+    <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-3xl p-6 md:p-8 text-white shadow-xl flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="space-y-2 text-center md:text-left">
+        <span class="bg-white/20 text-xs px-3 py-1 rounded-full font-semibold">ยินดีต้อนรับครับ</span>
+        <h2 class="text-2xl md:text-3xl font-bold leading-tight">สั่งอาหารออนไลน์ง่ายๆ ไม่ต้องรอคิว!</h2>
+        <p class="text-xs md:text-sm opacity-90">ทานที่ร้าน สั่งรับกลับบ้าน หรือจัดส่งถึงหน้าบ้าน ปักหมุดชำระเงินง่ายผ่าน QR Code</p>
+      </div>
+      <div class="text-6xl md:text-7xl animate-bounce">
+        🍗
+      </div>
+    </div>
+
+    <!-- Portal Selection Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+      
+      <!-- Card 1: สำหรับลูกค้า (Customer Portal) -->
+      <a href="customer.html" class="group bg-white p-6 rounded-3xl border-2 border-orange-100 hover:border-orange-500 shadow-md hover:shadow-2xl transition duration-300 flex flex-col justify-between space-y-4">
+        <div class="flex items-start justify-between">
+          <div class="w-14 h-14 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition duration-300">
+            <i class="fa-solid fa-utensils"></i>
+          </div>
+          <span class="text-xs font-bold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">สำหรับลูกค้า</span>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 group-hover:text-orange-600 transition">เมนู & สั่งอาหารออนไลน์</h3>
+          <p class="text-xs text-gray-500 mt-1">เข้าดูเมนูอาหาร เลือกรายการ สั่งทานที่ร้าน หรือจัดส่งถึงบ้าน พร้อมเช็กสถานะออเดอร์</p>
+        </div>
+        <div class="pt-2 flex items-center text-xs font-bold text-orange-600 gap-2">
+          <span>เข้าสู่หน้าสั่งอาหาร</span>
+          <i class="fa-solid fa-arrow-right group-hover:translate-x-1 transition"></i>
+        </div>
+      </a>
+
+      <!-- Card 2: สำหรับแอดมิน / พนักงาน (Admin Portal) -->
+      <a href="admin.html" class="group bg-white p-6 rounded-3xl border-2 border-slate-100 hover:border-slate-800 shadow-md hover:shadow-2xl transition duration-300 flex flex-col justify-between space-y-4">
+        <div class="flex items-start justify-between">
+          <div class="w-14 h-14 bg-slate-100 text-slate-800 rounded-2xl flex items-center justify-center text-3xl group-hover:scale-110 transition duration-300">
+            <i class="fa-solid fa-user-shield"></i>
+          </div>
+          <span class="text-xs font-bold bg-slate-100 text-slate-700 px-3 py-1 rounded-full">สำหรับหลังร้าน</span>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-gray-800 group-hover:text-slate-800 transition">ระบบจัดการหลังร้าน (POS Admin)</h3>
+          <p class="text-xs text-gray-500 mt-1">รับออเดอร์ Real-time, ตรวจสอบการโอนเงิน, พิมพ์สลิป 80mm, จัดการเมนู และดูรายงานยอดขาย</p>
+        </div>
+        <div class="pt-2 flex items-center text-xs font-bold text-slate-700 gap-2">
+          <span>เข้าสู่ระบบหลังร้าน</span>
+          <i class="fa-solid fa-lock text-xs"></i>
+        </div>
+      </a>
+
+    </div>
+
+    <!-- Quick Contact / Location Info -->
+    <div class="bg-white p-4 rounded-2xl border border-orange-100 shadow-sm flex flex-col sm:flex-row justify-between items-center text-xs gap-2 text-gray-600">
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-phone text-orange-600"></i>
+        <span>สอบถาม/สั่งซื้อทางโทรศัพท์: <strong id="shop-phone-display" class="text-gray-800">081-394-8240</strong></span>
+      </div>
+      <div class="flex items-center gap-2">
+        <i class="fa-solid fa-location-dot text-red-600"></i>
+        <span>บริการจัดส่งในพื้นที่และบริเวณใกล้เคียง</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- Footer Section -->
+  <footer class="bg-slate-900 text-gray-400 text-center py-4 text-xs border-t border-slate-800">
+    <p>© ระบบสั่งอาหารออนไลน์ร้านส้มตำ ไก่ทอด หมูทอด ข้าวกระเพรา • พัฒนาโดยกัปตัน</p>
+  </footer>
+
+  <script src="config.js"></script>
+  <script>
+    // ดึงชื่อร้าน/เบอร์/โลโก้จาก Google Sheet (แท็บ Config)
+    loadPublicData().then(data => {
+      const c = data.config || {};
+      if (c.shopName) document.getElementById('shop-name-display').innerText = c.shopName;
+      if (c.shopPhone) document.getElementById('shop-phone-display').innerText = c.shopPhone;
+      if (c.logo) {
+        const img = document.createElement('img');
+        img.src = c.logo; img.className = 'w-full h-full object-cover';
+        const box = document.getElementById('shop-logo'); box.innerHTML = ''; box.appendChild(img);
+      }
+    }).catch(() => {});
+  </script>
+</body>
+</html>

@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>สั่งอาหารออนไลน์ - ร้านกรูตำเองส้มตำ ไก่ทอด</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap');
+    body { font-family: 'Prompt', sans-serif; background-color: #FFFBEB; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .map-box { height: 180px; width: 100%; border-radius: 12px; margin-top: 6px; z-index: 10;}
+    .star-rating i { cursor: pointer; transition: color 0.2s; }
+    .star-rating i:hover { color: #f59e0b !important; }
+    /* Loading Spinner Overlay */
+    #global-loader { transition: opacity 0.3s ease; }
+  </style>
+</head>
+<body class="text-gray-800 pb-24 relative min-h-screen">
+
+  <!-- 🌟 ระบบ Loading 🌟 -->
+  <div id="global-loader" class="fixed inset-0 bg-white/90 z-[100] flex flex-col items-center justify-center">
+    <div class="w-16 h-16 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center text-3xl animate-bounce mb-3 shadow-lg">🌶️</div>
+    <h2 class="text-orange-600 font-bold">กำลังอัปเดตเมนูสดใหม่...</h2>
+  </div>
+
+  <script src="config.js"></script>
+  <script>
+    let currentSubmittedOrderId = localStorage.getItem('last_active_order_id') || null;
+    let paymentCheckInterval = null;
+    
+    let regMap = null, regMarker = null;
+    let editMap = null, editMarker = null;
+    let userCoords = { lat: 16.023, lng: 101.123 };
+  </script>
+
+  <!-- 🔒 LOGIN / REGISTER MODAL -->
+  <div id="auth-modal" class="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-4 shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto text-2xl">
+          <i class="fa-solid fa-user-lock"></i>
+        </div>
+        <h3 class="text-lg font-bold text-gray-800" id="auth-title">เข้าสู่ระบบสั่งอาหาร</h3>
+        <p class="text-xs text-gray-500">เข้าสู่ระบบด้วยเบอร์โทรศัพท์และรหัสผ่าน</p>
+      </div>
+
+      <div class="flex border-b text-xs font-bold border-gray-200">
+        <button onclick="switchAuthMode('login')" id="tab-auth-login" class="flex-1 py-2 text-center text-orange-600 border-b-2 border-orange-600">เข้าสู่ระบบ</button>
+        <button onclick="switchAuthMode('register')" id="tab-auth-register" class="flex-1 py-2 text-center text-gray-400">สมัครสมาชิก</button>
+      </div>
+
+      <!-- Form Login -->
+      <div id="form-login" class="space-y-3">
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">เบอร์โทรศัพท์ *</label>
+          <input type="tel" id="login-phone" placeholder="เช่น 0812345678" maxlength="10" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500">
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">รหัสผ่าน *</label>
+          <input type="password" id="login-pass" placeholder="กรอกรหัสผ่าน" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500">
+        </div>
+        <button onclick="handleLogin()" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl shadow-md text-xs transition">
+          <i class="fa-solid fa-right-to-bracket"></i> เข้าสู่ระบบ
+        </button>
+      </div>
+
+      <!-- Form Register -->
+      <div id="form-register" class="space-y-3 hidden">
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">ชื่อ-นามสกุล ผู้รับ *</label><input type="text" id="reg-name" placeholder="เช่น คุณกัปตัน" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">เบอร์โทรศัพท์ *</label><input type="tel" id="reg-phone" placeholder="เช่น 0812345678" maxlength="10" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">ตั้งรหัสผ่าน *</label><input type="password" id="reg-pass" placeholder="อย่างน้อย 4 หลัก" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">ที่อยู่จัดส่ง *</label><textarea id="reg-address" rows="2" placeholder="บ้านเลขที่ ซอย ถนน จุดสังเกต..." class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></textarea></div>
+
+        <div class="bg-orange-50/60 p-2.5 rounded-xl border border-orange-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[11px] font-bold text-orange-900"><i class="fa-solid fa-location-dot text-red-600"></i> ปักหมุดบ้านของคุณ</label>
+            <button type="button" onclick="getCurrentGPS('reg')" class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold hover:bg-blue-700"><i class="fa-solid fa-crosshairs"></i> ดึง GPS</button>
+          </div>
+          <div id="reg-map" class="map-box"></div>
+        </div>
+
+        <button onclick="handleRegister()" id="btn-reg-submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 rounded-xl shadow-md text-xs transition">
+          <i class="fa-solid fa-user-plus"></i> สมัครสมาชิก & บันทึกข้อมูล
+        </button>
+      </div>
+
+      <button onclick="closeAuthModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-2 rounded-xl text-xs">ยกเลิก</button>
+    </div>
+  </div>
+
+  <!-- ✏️ MODAL แก้ไขข้อมูลส่วนตัว & ออกจากระบบ -->
+  <div id="edit-profile-modal" class="fixed inset-0 bg-slate-900/80 z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 space-y-3.5 shadow-2xl overflow-y-auto max-h-[90vh]">
+      <div class="flex justify-between items-center border-b pb-2">
+        <h3 class="text-base font-bold text-gray-800 flex items-center gap-2"><i class="fa-solid fa-user-gear text-orange-600"></i> ข้อมูลส่วนตัว</h3>
+        <button onclick="closeEditProfileModal()" class="text-gray-400 hover:text-gray-600 text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-3">
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">ชื่อ-นามสกุล *</label><input type="text" id="edit-name" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">เบอร์โทรศัพท์ *</label><input type="tel" id="edit-phone" maxlength="10" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">เปลี่ยนรหัสผ่าน (เว้นว่างถ้าไม่เปลี่ยน)</label><input type="password" placeholder="รหัสผ่านใหม่" id="edit-pass" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></div>
+        <div><label class="block text-xs font-semibold text-gray-700 mb-1">ที่อยู่จัดส่ง *</label><textarea id="edit-address" rows="2" class="w-full px-3 py-2 border rounded-xl text-xs outline-none focus:ring-2 focus:ring-orange-500"></textarea></div>
+
+        <div class="bg-orange-50/60 p-2.5 rounded-xl border border-orange-200">
+          <div class="flex justify-between items-center mb-1">
+            <label class="text-[11px] font-bold text-orange-900"><i class="fa-solid fa-location-dot text-red-600"></i> ปรับพิกัดบ้านจัดส่ง</label>
+            <button type="button" onclick="getCurrentGPS('edit')" class="text-[10px] bg-blue-600 text-white px-2 py-0.5 rounded font-bold hover:bg-blue-700"><i class="fa-solid fa-crosshairs"></i> ดึง GPS ปัจจุบัน</button>
+          </div>
+          <div id="edit-map" class="map-box"></div>
+        </div>
+
+        <button onclick="saveProfileEdit()" id="btn-save-profile" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-2.5 rounded-xl shadow-md text-xs transition">
+          <i class="fa-solid fa-floppy-disk"></i> บันทึกการแก้ไขข้อมูล
+        </button>
+        
+        <!-- 🔴 ปุ่มออกจากระบบ -->
+        <button onclick="logoutUser()" class="w-full bg-red-50 hover:bg-red-100 text-red-600 font-bold py-2.5 rounded-xl border border-red-200 text-xs transition mt-2 flex items-center justify-center gap-2">
+          <i class="fa-solid fa-right-from-bracket"></i> ออกจากระบบ (Logout)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="bg-gradient-to-r from-amber-600 via-orange-600 to-red-600 text-white shadow-lg sticky top-0 z-40">
+    <div class="max-w-3xl mx-auto px-4 py-3 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div id="shop-logo-box" class="w-10 h-10 rounded-full bg-white text-orange-600 flex items-center justify-center font-bold text-xl shadow overflow-hidden">🌶️</div>
+        <div>
+          <h1 class="font-bold text-base md:text-lg leading-tight" id="shop-header-title">ร้านส้มตำ ไก่ทอด</h1>
+          <p class="text-xs text-amber-100 flex items-center gap-1">
+            <span class="w-2 h-2 rounded-full bg-green-400 inline-block animate-pulse"></span> เปิดรับออเดอร์ออนไลน์
+          </p>
+        </div>
+      </div>
+      
+      <div class="flex items-center gap-1.5">
+        <button onclick="openOrderStatusModal()" class="p-1.5 px-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-full text-xs font-bold flex items-center gap-1 shadow transition">
+          <i class="fa-solid fa-receipt"></i> <span class="hidden sm:inline">เช็กสถานะ</span>
+        </button>
+        <button onclick="handleUserHeaderClick()" id="user-profile-btn" class="p-1.5 px-3 bg-white/20 hover:bg-white/30 rounded-full text-xs font-bold flex items-center gap-1.5 transition">
+          <i class="fa-solid fa-user"></i> <span id="header-user-name">เข้าสู่ระบบ</span>
+        </button>
+        <button onclick="toggleCart()" class="relative p-2 bg-white/20 hover:bg-white/30 rounded-full transition">
+          <i class="fa-solid fa-cart-shopping text-xl"></i>
+          <span id="cart-badge" class="hidden absolute -top-1 -right-1 bg-red-600 text-white text-[10px] font-bold rounded-full h-5 w-5 flex items-center justify-center border-2 border-white">0</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-3xl mx-auto px-4 pt-4">
+    <!-- Banner -->
+    <div class="bg-gradient-to-r from-amber-500 to-orange-500 rounded-2xl p-4 text-white shadow-md mb-4 flex justify-between items-center">
+      <div>
+        <span class="bg-white/20 text-[10px] px-2 py-0.5 rounded-full font-semibold">แซ่บสดใหม่ทุกวัน</span>
+        <h2 class="text-base font-bold mt-1">สั่งง่าย จ่ายสะดวก สแกน QR ได้ทันที</h2>
+      </div>
+      <i class="fa-solid fa-fire text-3xl opacity-30"></i>
+    </div>
+
+    <!-- 🌟 Category Filter (Dynamic Container) -->
+    <div id="category-container" class="flex space-x-2 overflow-x-auto pb-3 mb-4 hide-scrollbar">
+      <!-- ปุ่มจะถูกสร้างที่นี่อัตโนมัติ -->
+    </div>
+<!-- ========================================== -->
+<!-- 1. HTML ส่วนช่องค้นหาเมนูอาหาร (นำไปวางในตำแหน่งที่ต้องการแสดงช่องค้นหา) -->
+<!-- ========================================== -->
+<div class="mb-4 px-2">
+  <input 
+    type="text" 
+    id="searchMenuInput" 
+    oninput="filterMenu()" 
+    placeholder="🔍 ค้นหาเมนูอาหาร..." 
+    class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-base"
+  >
+</div>
+
+
+<!-- ========================================== -->
+<!-- 2. โค้ด JavaScript สำหรับกรองเมนูแบบเรียลไทม์ (นำไปวางไว้ในแท็บ <script> ของหน้าเว็บ) -->
+<!-- ========================================== -->
+<script>
+  // ฟังก์ชันค้นหาและกรองเมนูอาหารทันทีที่พิมพ์
+  function filterMenu() {
+    var input = document.getElementById('searchMenuInput');
+    var filter = input.value.toLowerCase().trim();
+    
+    // ดึงการ์ดเมนูทั้งหมดที่มีคลาส menu-item หรืออยู่ในโครงสร้างตาราง
+    var menuItems = document.querySelectorAll('.menu-item, #menuContainer > div, [data-name]');
+    
+    menuItems.forEach(function(item) {
+      // ดึงข้อความและชื่อจาก data-name
+      var text = item.innerText.toLowerCase();
+      var dataName = (item.getAttribute('data-name') || "").toLowerCase();
+      
+      // ถ้าคำที่พิมพ์ตรงกับชื่อเมนูหรือข้อความในการ์ด ให้แสดงผล ถ้าไม่ตรงให้ซ่อน
+      if (text.indexOf(filter) > -1 || dataName.indexOf(filter) > -1) {
+        item.style.display = ""; // แสดงการ์ด
+      } else {
+        item.style.display = "none"; // ซ่อนการ์ด
+      }
+    });
+  }
+</script>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3" id="product-grid"></div>
+  </main>
+  <!-- Bottom Cart Bar -->
+  <div id="bottom-bar" class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl p-3 z-30 hidden">
+    <div class="max-w-3xl mx-auto flex justify-between items-center">
+      <div>
+        <p class="text-xs text-gray-500">รวมทั้งหมด (<span id="bottom-cart-count">0</span> รายการ)</p>
+        <p class="text-lg font-bold text-orange-600">฿<span id="bottom-cart-total">0</span></p>
+      </div>
+      <button onclick="toggleCart()" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-6 py-2.5 rounded-xl flex items-center gap-2 shadow-lg transition">
+        <span>ดูตะกร้าสินค้า</span> <i class="fa-solid fa-arrow-right text-xs"></i>
+      </button>
+    </div>
+  </div>
+
+  <!-- Cart Modal (ตะกร้าสั่งอาหาร) -->
+  <div id="cart-modal" class="fixed inset-0 bg-black/60 z-50 hidden flex justify-end">
+    <div class="bg-white w-full max-w-md h-full flex flex-col justify-between shadow-2xl">
+      <div class="p-4 bg-orange-600 text-white flex justify-between items-center">
+        <h3 class="font-bold text-base flex items-center gap-2"><i class="fa-solid fa-basket-shopping"></i> รายการสั่งซื้อ</h3>
+        <button onclick="toggleCart()" class="text-white hover:bg-white/20 p-1 rounded-full"><i class="fa-solid fa-xmark text-xl"></i></button>
+      </div>
+
+      <div class="p-4 flex-1 overflow-y-auto space-y-3" id="cart-items"></div>
+
+      <div class="p-4 border-t border-gray-200 bg-gray-50 space-y-2.5 max-h-[60vh] overflow-y-auto">
+        <div id="user-info-box" class="bg-orange-50 p-3 rounded-xl border border-orange-200 text-xs space-y-1">
+          <div class="flex justify-between items-center">
+            <span class="font-bold text-orange-900">👤 คุณ <span id="cart-user-name">-</span></span>
+            <button onclick="openEditProfileModal()" class="px-2 py-0.5 bg-orange-600 text-white rounded font-bold text-[10px] hover:bg-orange-700">
+              <i class="fa-solid fa-pen-to-square"></i> แก้ไขข้อมูล
+            </button>
+          </div>
+          <p class="text-gray-600">📞 เบอร์: <span id="cart-user-phone">-</span></p>
+          <p class="text-gray-600 truncate">📍 ที่อยู่: <span id="cart-user-address">-</span></p>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">ประเภทการรับอาหาร *</label>
+          <select id="order-type" onchange="toggleOrderTypeInputs()" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-orange-500 bg-white">
+            <option value="ทานที่ร้าน">ทานที่ร้าน (Dine-in)</option>
+            <option value="จัดส่งถึงบ้าน">จัดส่งถึงบ้าน (Delivery)</option>
+            <option value="รับกลับบ้าน">รับกลับบ้าน (Takeaway)</option>
+          </select>
+        </div>
+
+        <!-- 🌟 ระบบเลือกวิธีชำระเงิน -->
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">วิธีชำระเงิน *</label>
+          <select id="payment-method" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-orange-500 bg-white font-bold text-orange-700">
+            <option value="โอนชำระ">📱 โอนชำระ (สแกน QR Code)</option>
+            <option value="เก็บปลายทาง">💵 เก็บเงินปลายทาง (เงินสด)</option>
+          </select>
+        </div>
+
+        <div id="table-no-container">
+          <label class="block text-xs font-semibold text-gray-700 mb-1">หมายเลขโต๊ะ *</label>
+          <input type="text" id="table-no" placeholder="ระบุเลขโต๊ะ เช่น โต๊ะ 3" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-orange-500 bg-white">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-gray-700 mb-1">หมายเหตุเพิ่มเติม</label>
+          <input type="text" id="order-note" placeholder="เช่น เผ็ดน้อย, ไม่ใส่ผักชี" class="w-full px-3 py-2 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-orange-500 bg-white">
+        </div>
+
+        <div class="pt-2 border-t flex justify-between items-center font-bold">
+          <span class="text-sm">ยอดรวมทั้งหมด</span>
+          <span class="text-orange-600 text-lg">฿<span id="modal-cart-total">0</span></span>
+        </div>
+
+        <button onclick="submitOrder()" id="btn-submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 rounded-xl shadow-lg flex items-center justify-center gap-2 text-sm transition">
+          <i class="fa-solid fa-paper-plane"></i> ยืนยันสั่งอาหาร
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal / Order Status -->
+  <div id="qr-modal" class="fixed inset-0 bg-black/70 z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-5 text-center space-y-3.5 shadow-2xl overflow-y-auto max-h-[90vh]">
+      
+      <div id="pay-status-icon" class="w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce">
+        <i class="fa-solid fa-utensils"></i>
+      </div>
+      
+      <div>
+        <h3 class="text-lg font-bold text-gray-800" id="pay-status-title">กำลังติดตามออเดอร์...</h3>
+        <p class="text-xs text-orange-600 font-bold" id="pay-order-id-display"></p>
+      </div>
+
+      <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2 text-left">
+        <p class="text-[11px] font-bold text-gray-700 flex justify-between items-center">
+          <span>🍳 สถานะการออเดอร์:</span>
+          <span id="kitchen-status-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">กำลังรอ</span>
+        </p>
+
+        <div class="grid grid-cols-4 gap-1 pt-1 text-center text-[9px] font-bold">
+          <div id="step-wait" class="p-1.5 rounded-lg bg-amber-500 text-white">1. กำลังรอ</div>
+          <div id="step-cook" class="p-1.5 rounded-lg bg-gray-200 text-gray-500">2. กำลังทำ</div>
+          <div id="step-ship" class="p-1.5 rounded-lg bg-gray-200 text-gray-500">3. กำลังส่ง</div>
+          <div id="step-done" class="p-1.5 rounded-lg bg-gray-200 text-gray-500">4. เสร็จสิ้น</div>
+        </div>
+      </div>
+
+      <div id="delivery-proof-box" class="hidden space-y-2 border-t pt-3 mt-3 text-left">
+        <h4 class="text-xs font-bold text-green-700 text-center"><i class="fa-solid fa-check-circle"></i> อาหารจัดส่งถึงคุณเรียบร้อยแล้ว</h4>
+        <img id="delivery-photo-img" src="" class="w-full h-40 object-cover rounded-xl border-2 border-gray-200 shadow-sm hidden">
+        
+        <div id="rating-box" class="bg-orange-50 p-3 rounded-xl border border-orange-100 text-center mt-2">
+          <p class="text-[10px] font-bold text-gray-700 mb-1">ให้คะแนนความพึงพอใจการบริการ</p>
+          <div class="text-2xl text-gray-300 star-rating flex justify-center gap-1" id="star-container">
+            <i class="fa-solid fa-star cursor-pointer hover:text-orange-500" onclick="rateOrder(1)"></i>
+            <i class="fa-solid fa-star cursor-pointer hover:text-orange-500" onclick="rateOrder(2)"></i>
+            <i class="fa-solid fa-star cursor-pointer hover:text-orange-500" onclick="rateOrder(3)"></i>
+            <i class="fa-solid fa-star cursor-pointer hover:text-orange-500" onclick="rateOrder(4)"></i>
+            <i class="fa-solid fa-star cursor-pointer hover:text-orange-500" onclick="rateOrder(5)"></i>
+          </div>
+          <p id="rating-thanks" class="text-xs font-bold text-green-600 mt-2 hidden">ขอบคุณที่ให้คะแนนครับ! 💖</p>
+        </div>
+      </div>
+
+      <div id="payment-zone" class="space-y-3">
+        <div id="pay-status-badge" class="inline-block px-3 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs">
+          สถานะการเงิน: 🔴 รอชำระเงิน
+        </div>
+
+        <div id="bank-details-box" class="bg-slate-50 border border-slate-200 rounded-xl p-3 text-left space-y-2 text-xs">
+          <div class="space-y-0.5">
+            <p class="font-bold text-gray-700 flex items-center gap-1"><i class="fa-solid fa-building-columns text-orange-600"></i> โอนผ่านบัญชีธนาคาร</p>
+            <p class="text-gray-600">ธนาคาร: <strong id="pay-bank-name">กสิกรไทย</strong> | ชื่อ: <strong id="pay-acc-name">ร้านส้มตำ</strong></p>
+            <div class="flex justify-between items-center bg-white p-1.5 border rounded-lg">
+              <span class="font-mono font-bold text-xs text-orange-600" id="pay-acc-num">123-4-56789-0</span>
+              <button onclick="copyText('pay-acc-num')" class="px-2 py-0.5 bg-orange-100 hover:bg-orange-200 text-orange-700 rounded font-bold text-[10px]">คัดลอก</button>
+            </div>
+          </div>
+
+          <div class="border-t pt-1.5 space-y-0.5">
+            <p class="font-bold text-gray-700 flex items-center gap-1"><i class="fa-solid fa-qrcode text-blue-600"></i> โอนผ่านพร้อมเพย์ (PromptPay)</p>
+            <p class="text-gray-600">ชื่อบัญชี: <strong id="pay-pp-name">ร้านส้มตำ</strong></p>
+            <div class="flex justify-between items-center bg-white p-1.5 border rounded-lg">
+              <span class="font-mono font-bold text-xs text-blue-600" id="pay-pp-num">081-394-8240</span>
+              <button onclick="copyText('pay-pp-num')" class="px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-bold text-[10px]">คัดลอก</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="qr-box" class="bg-gray-50 p-2.5 rounded-xl border border-dashed border-gray-300 inline-block w-full">
+          <p class="text-[11px] font-bold text-gray-600 mb-1">สแกน QR Code เพื่อชำระเงิน</p>
+          <img id="qr-image" src="" alt="QR Code" class="w-40 h-40 mx-auto rounded-lg object-contain border bg-white p-1 shadow-sm">
+          <p class="text-xs font-bold text-gray-700 mt-2">ยอดชำระสุทธิ: <span class="text-orange-600 text-base">฿<span id="qr-amount">0</span></span></p>
+        </div>
+
+        <button onclick="notifyPaymentDone()" id="btn-notify-pay" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow text-xs flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-circle-check"></i> แจ้งโอนเงินแล้ว (แจ้งแอดมิน)
+        </button>
+      </div>
+
+      <button onclick="closePaymentModal()" class="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold py-2 rounded-xl text-xs mt-2">
+        ปิดหน้านี้
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // 🌟 1. ประกาศตัวแปรรับข้อมูลจาก Google Sheets (เริ่มต้นเป็นค่าว่างก่อน)
+    let shopCategories = ["ทั้งหมด"];
+    let activeCat = 'ทั้งหมด';
+    let products = [];
+    let billConfig = {};
+    let cart = [];
+    
+    let currentUser = JSON.parse(localStorage.getItem('pos_current_user') || 'null');
+
+    // 🌟 2. ฟังก์ชันหลักที่จะยิงไปดึงข้อมูลทุกอย่างมาแสดง
+    async function loadDataFromCloud() {
+      try {
+        const data = await loadPublicData();
+        
+        // 2.1 โหลดเมนู
+        if (data.menu && data.menu.length > 0) {
+          products = data.menu;
+          // สร้างหมวดหมู่อัตโนมัติจากที่มีในเมนู 
+          const uniqueCats = new Set(["ทั้งหมด"]);
+          products.forEach(p => { if(p.category) uniqueCats.add(p.category); });
+          shopCategories = Array.from(uniqueCats);
+        }
+
+        // 2.2 โหลดตั้งค่าร้าน
+        if (data.config && Object.keys(data.config).length > 0) {
+          billConfig = data.config;
+          if (billConfig.shopName) document.getElementById('shop-header-title').innerText = billConfig.shopName;
+          if (billConfig.logo) document.getElementById('shop-logo-box').innerHTML = `<img src="${billConfig.logo}" class="w-full h-full object-cover">`;
+        }
+
+        // 2.3 สั่งวาดเมนูและหมวดหมู่ขึ้นหน้าจอ
+        renderCategories();
+        renderProducts();
+
+      } catch(e) {
+        console.error("โหลดข้อมูลจาก Cloud ไม่สำเร็จ", e);
+        // ถ้าโหลดพัง ให้ไปดึงของเก่าจาก Cache (ถ้ามี)
+        document.getElementById('product-grid') && (document.getElementById('product-grid').innerHTML = '<p class="col-span-full text-center text-red-500 text-sm py-8">โหลดเมนูไม่สำเร็จ กรุณารีเฟรชหน้าเว็บ</p>');
+        renderCategories();
+        renderProducts();
+      } finally {
+        // โหลดเสร็จ ซ่อนหน้าจอหมุนๆ
+        document.getElementById('global-loader').style.opacity = '0';
+        setTimeout(() => document.getElementById('global-loader').style.display = 'none', 300);
+      }
+    }
+
+    function updateUIForAuth() {
+      if (currentUser) {
+        document.getElementById('header-user-name').innerText = currentUser.name.split(' ')[0];
+        document.getElementById('cart-user-name').innerText = currentUser.name;
+        document.getElementById('cart-user-phone').innerText = currentUser.phone;
+        document.getElementById('cart-user-address').innerText = currentUser.address;
+        if (currentUser.coords) userCoords = currentUser.coords;
+      } else {
+        document.getElementById('header-user-name').innerText = "เข้าสู่ระบบ";
+      }
+    }
+
+    function handleUserHeaderClick() {
+      if (currentUser) openEditProfileModal();
+      else openAuthModal();
+    }
+
+    function openAuthModal() { document.getElementById('auth-modal').classList.remove('hidden'); }
+    function closeAuthModal() { document.getElementById('auth-modal').classList.add('hidden'); }
+
+    function switchAuthMode(mode) {
+      const isLogin = mode === 'login';
+      document.getElementById('form-login').classList.toggle('hidden', !isLogin);
+      document.getElementById('form-register').classList.toggle('hidden', isLogin);
+
+      document.getElementById('tab-auth-login').className = isLogin 
+        ? "flex-1 py-2 text-center text-orange-600 border-b-2 border-orange-600 font-bold"
+        : "flex-1 py-2 text-center text-gray-400 font-bold";
+
+      document.getElementById('tab-auth-register').className = !isLogin 
+        ? "flex-1 py-2 text-center text-orange-600 border-b-2 border-orange-600 font-bold"
+        : "flex-1 py-2 text-center text-gray-400 font-bold";
+
+      if (!isLogin) initMap('reg');
+    }
+
+    function logoutUser() {
+      if(confirm('คุณต้องการออกจากระบบใช่หรือไม่?')) {
+        currentUser = null;
+        localStorage.removeItem('pos_current_user');
+        closeEditProfileModal();
+        updateUIForAuth();
+        alert('ออกจากระบบเรียบร้อยแล้ว');
+      }
+    }
+
+    async function handleRegister() {
+      const name = document.getElementById('reg-name').value.trim();
+      const phone = document.getElementById('reg-phone').value.trim();
+      const pass = document.getElementById('reg-pass').value.trim();
+      const address = document.getElementById('reg-address').value.trim();
+
+      if (!name || !phone || !pass || !address) return alert('กรุณากรอกข้อมูลให้ครบทุกช่อง');
+      if (pass.length < 4) return alert('รหัสผ่านต้องมีอย่างน้อย 4 ตัวอักษร');
+
+      const btn = document.getElementById('btn-reg-submit');
+      btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
+
+      try {
+        const r = await apiCall('register', { name, phone, password: pass, address, lat: userCoords.lat, lng: userCoords.lng });
+        currentUser = Object.assign({}, r.user, { token: r.token });
+        localStorage.setItem('pos_current_user', JSON.stringify(currentUser));
+        alert('สมัครสมาชิกเรียบร้อยแล้ว!');
+        closeAuthModal();
+        updateUIForAuth();
+      } catch (e) {
+        alert(e.message);
+      } finally {
+        btn.innerText = "สมัครสมาชิก & บันทึกข้อมูล"; btn.disabled = false;
+      }
+    }
+
+    async function handleLogin() {
+      const phone = document.getElementById('login-phone').value.trim();
+      const pass = document.getElementById('login-pass').value.trim();
+
+      if (!phone || !pass) return alert('กรุณากรอกเบอร์และรหัสผ่าน');
+
+      try {
+        const r = await apiCall('login', { phone, password: pass });
+        currentUser = Object.assign({}, r.user, { token: r.token });
+        localStorage.setItem('pos_current_user', JSON.stringify(currentUser));
+        alert(`ยินดีต้อนรับคุณ ${currentUser.name}!`);
+        closeAuthModal();
+        updateUIForAuth();
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    function openEditProfileModal() {
+      if (!currentUser) return openAuthModal();
+      document.getElementById('edit-name').value = currentUser.name || '';
+      document.getElementById('edit-phone').value = currentUser.phone || '';
+      document.getElementById('edit-pass').value = '';
+      document.getElementById('edit-address').value = currentUser.address || '';
+      document.getElementById('edit-profile-modal').classList.remove('hidden');
+      initMap('edit');
+    }
+
+    function closeEditProfileModal() { document.getElementById('edit-profile-modal').classList.add('hidden'); }
+
+    async function saveProfileEdit() {
+      const newName = document.getElementById('edit-name').value.trim();
+      const newPhone = document.getElementById('edit-phone').value.trim();
+      const newPass = document.getElementById('edit-pass').value.trim();
+      const newAddress = document.getElementById('edit-address').value.trim();
+
+      if (!newName || !newPhone || !newAddress) return alert('กรุณากรอกข้อมูลให้ครบถ้วน');
+
+      const btn = document.getElementById('btn-save-profile');
+      btn.innerText = "กำลังบันทึก..."; btn.disabled = true;
+
+      try {
+        const r = await apiCall('updateUser', {
+          token: currentUser.token,
+          user: { name: newName, phone: newPhone, password: newPass, address: newAddress, coords: userCoords }
+        });
+        currentUser = Object.assign({}, r.user, { token: r.token });
+        localStorage.setItem('pos_current_user', JSON.stringify(currentUser));
+        alert('แก้ไขข้อมูลส่วนตัวเรียบร้อยแล้ว!');
+        closeEditProfileModal();
+        updateUIForAuth();
+      } catch (e) {
+        alert(e.message);
+        if (/เข้าสู่ระบบ/.test(e.message)) sessionExpired();
+      } finally {
+        btn.innerText = "บันทึกการแก้ไขข้อมูล"; btn.disabled = false;
+      }
+    }
+
+    // token หมดอายุ/ไม่ถูกต้อง -> ให้ล็อกอินใหม่
+    function sessionExpired() {
+      currentUser = null;
+      localStorage.removeItem('pos_current_user');
+      updateUIForAuth();
+      closeEditProfileModal();
+      openAuthModal();
+    }
+
+    function initMap(type) {
+      setTimeout(() => {
+        const containerId = type === 'reg' ? 'reg-map' : 'edit-map';
+        let targetMap = type === 'reg' ? regMap : editMap;
+        let targetMarker = type === 'reg' ? regMarker : editMarker;
+
+        const startCoords = (type === 'edit' && currentUser && currentUser.coords) ? currentUser.coords : userCoords;
+
+        if (!targetMap && typeof L !== 'undefined') {
+          targetMap = L.map(containerId).setView([startCoords.lat, startCoords.lng], 14);
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(targetMap);
+
+          targetMarker = L.marker([startCoords.lat, startCoords.lng], { draggable: true }).addTo(targetMap);
+          targetMarker.on('dragend', function (e) {
+            const pos = targetMarker.getLatLng();
+            userCoords = { lat: pos.lat, lng: pos.lng };
+          });
+
+          targetMap.on('click', function (e) {
+            targetMarker.setLatLng(e.latlng);
+            userCoords = { lat: e.latlng.lat, lng: e.latlng.lng };
+          });
+
+          if (type === 'reg') { regMap = targetMap; regMarker = targetMarker; }
+          else { editMap = targetMap; editMarker = targetMarker; }
+        } else if (targetMap) {
+          targetMap.setView([startCoords.lat, startCoords.lng], 14);
+          targetMarker.setLatLng([startCoords.lat, startCoords.lng]);
+          targetMap.invalidateSize();
+        }
+      }, 250);
+    }
+
+    function getCurrentGPS(type) {
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            const m = type === 'reg' ? regMap : editMap;
+            const mk = type === 'reg' ? regMarker : editMarker;
+            if (m && mk) {
+              m.setView([userCoords.lat, userCoords.lng], 16);
+              mk.setLatLng([userCoords.lat, userCoords.lng]);
+            }
+            alert('ดึงพิกัด GPS สำเร็จ!');
+          },
+          () => alert('ไม่สามารถดึง GPS ได้ กรุณาแตะปักหมุดบนแผนที่เองครับ')
+        );
+      }
+    }
+
+    function renderCategories() {
+      const container = document.getElementById('category-container');
+      container.innerHTML = shopCategories.map(cat => {
+        const isActive = activeCat === cat;
+        const btnClass = isActive 
+          ? "px-4 py-2 rounded-xl text-xs font-semibold bg-orange-600 text-white shadow-sm whitespace-nowrap transition"
+          : "px-4 py-2 rounded-xl text-xs font-semibold bg-white text-gray-600 border whitespace-nowrap transition hover:bg-orange-50";
+        return `<button onclick="filterCategory('${cat}')" class="${btnClass}">${cat}</button>`;
+      }).join('');
+    }
+
+    function filterCategory(cat) { 
+      activeCat = cat; 
+      renderCategories();
+      renderProducts();
+    }
+
+    function renderProducts() {
+      const grid = document.getElementById('product-grid');
+      const list = activeCat === 'ทั้งหมด' ? products : products.filter(p => p.category === activeCat);
+      
+      if (list.length === 0) {
+        grid.innerHTML = `<p class="col-span-3 text-center text-xs text-gray-400 py-8">ยังไม่มีรายการเมนู</p>`;
+        return;
+      }
+
+      grid.innerHTML = list.map(p => {
+        const isImg = p.image && (p.image.startsWith('data:image') || p.image.startsWith('http'));
+        const imgHtml = isImg 
+          ? `<img src="${p.image}" class="w-full h-28 object-cover rounded-xl mb-2" alt="${p.name}">`
+          : `<div class="text-3xl text-center py-4 bg-orange-50 rounded-xl mb-2">${p.image || '🌶️'}</div>`;
+
+        return `
+          <div class="bg-white rounded-2xl p-2.5 shadow-sm border border-orange-100 flex flex-col justify-between hover:shadow-md transition">
+            <div>
+              ${imgHtml}
+              <h4 class="font-semibold text-xs text-gray-800 leading-tight">${p.name}</h4>
+              <p class="text-[10px] text-gray-400 mt-0.5">${p.category}</p>
+            </div>
+            <div class="flex justify-between items-center mt-2 pt-2 border-t border-gray-100">
+              <span class="font-bold text-orange-600 text-xs">฿${p.price}</span>
+              <button onclick="addToCart(${p.id})" class="bg-orange-600 hover:bg-orange-700 text-white text-[11px] px-2.5 py-1 rounded-lg font-medium shadow-sm transition">+ เพิ่ม</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // 🛒 ฟังก์ชันตะกร้าสินค้า
+    function addToCart(id) {
+      if (!currentUser) {
+        alert('กรุณาเข้าสู่ระบบก่อนเลือกอาหารครับ');
+        openAuthModal();
+        return;
+      }
+      const p = products.find(x => x.id === id);
+      const ex = cart.find(x => x.id === id);
+      if(ex) ex.qty++; else cart.push({...p, qty: 1});
+      updateCartUI();
+    }
+
+    function updateCartUI() {
+      const qty = cart.reduce((a,b)=>a+b.qty, 0);
+      const total = cart.reduce((a,b)=>a+(b.price*b.qty), 0);
+      document.getElementById('bottom-bar').classList.toggle('hidden', qty === 0);
+      document.getElementById('cart-badge').classList.toggle('hidden', qty === 0);
+      document.getElementById('cart-badge').innerText = qty;
+      document.getElementById('bottom-cart-count').innerText = qty;
+      document.getElementById('bottom-cart-total').innerText = total;
+      document.getElementById('modal-cart-total').innerText = total;
+
+      document.getElementById('cart-items').innerHTML = cart.map(item => `
+        <div class="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+          <div>
+            <p class="font-semibold text-xs text-gray-800">${item.name}</p>
+            <p class="text-xs text-orange-600 font-bold">฿${item.price * item.qty}</p>
+          </div>
+          <div class="flex items-center space-x-2">
+            <button onclick="changeQty(${item.id}, -1)" class="w-6 h-6 bg-white border border-gray-300 rounded-lg text-xs font-bold">-</button>
+            <span class="text-xs font-bold w-4 text-center">${item.qty}</span>
+            <button onclick="changeQty(${item.id}, 1)" class="w-6 h-6 bg-orange-600 text-white rounded-lg text-xs font-bold">+</button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function changeQty(id, delta) {
+      const item = cart.find(i => i.id === id);
+      if(item) { item.qty += delta; if(item.qty <= 0) cart = cart.filter(i => i.id !== id); }
+      updateCartUI();
+    }
+
+    function toggleCart() { 
+      if (!currentUser && cart.length > 0) return openAuthModal();
+      document.getElementById('cart-modal').classList.toggle('hidden'); 
+    }
+    
+    function toggleOrderTypeInputs() {
+      const type = document.getElementById('order-type').value;
+      document.getElementById('table-no-container').classList.toggle('hidden', type !== 'ทานที่ร้าน');
+    }
+
+    function copyText(id) {
+      const txt = document.getElementById(id).innerText;
+      navigator.clipboard.writeText(txt);
+      alert('คัดลอกเรียบร้อย: ' + txt);
+    }
+
+    // 🔔 การสั่งอาหารและการเช็กสถานะ
+    async function openOrderStatusModal() {
+      if (!currentSubmittedOrderId) return alert('คุณยังไม่มีออเดอร์ที่สั่งซื้อในขณะนี้ครับ');
+      document.getElementById('qr-modal').classList.remove('hidden');
+      startPaymentCheck();
+    }
+
+    async function notifyPaymentDone() {
+      if (!currentSubmittedOrderId) return;
+      const btn = document.getElementById('btn-notify-pay');
+      btn.innerText = "กำลังแจ้งแอดมิน..."; btn.disabled = true;
+
+      try {
+        await apiCall('notifyPaid', { token: currentUser && currentUser.token, orderId: currentSubmittedOrderId });
+        document.getElementById('pay-status-badge').className = "inline-block px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-full text-xs";
+        document.getElementById('pay-status-badge').innerText = "สถานะการเงิน: 🔵 แจ้งโอนแล้ว (รอแอดมินตรวจ)";
+        alert('แจ้งชำระเงินเรียบร้อยแล้ว!');
+      } catch(e) {
+        alert('เกิดข้อผิดพลาดในการแจ้งชำระเงิน: ' + e.message);
+      } finally {
+        btn.innerText = "แจ้งโอนเงินแล้ว (แจ้งแอดมิน)"; btn.disabled = false;
+      }
+    }
+
+    async function submitOrder() {
+      if (!currentUser) return openAuthModal();
+      if (cart.length === 0) return alert('กรุณาเลือกรายการอาหารก่อนครับ');
+
+      const btn = document.getElementById('btn-submit');
+      btn.innerText = "กำลังส่งออเดอร์..."; btn.disabled = true;
+
+      const orderType = document.getElementById('order-type').value;
+      const paymentMethod = document.getElementById('payment-method').value; 
+      const userNote = document.getElementById('order-note').value.trim();
+      
+      let fullNote = userNote;
+      if (orderType === 'จัดส่งถึงบ้าน') {
+        const mapUrl = `https://www.google.com/maps?q=${currentUser.coords ? currentUser.coords.lat : userCoords.lat},${currentUser.coords ? currentUser.coords.lng : userCoords.lng}`;
+        fullNote = `[ที่อยู่: ${currentUser.address}] [แผนที่: ${mapUrl}] ${userNote}`;
+      }
+      
+      fullNote = `[วิธีชำระ: ${paymentMethod}] ` + fullNote;
+
+      try {
+        // เซิร์ฟเวอร์เป็นผู้สร้างเลขออเดอร์และคำนวณยอดรวมจากราคาเมนูในชีตเอง
+        const r = await apiCall('addOrder', {
+          token: currentUser.token,
+          order: {
+            type: orderType, table: document.getElementById('table-no').value || '-',
+            items: cart.map(c => ({ id: c.id, qty: c.qty })), note: fullNote,
+            payment: paymentMethod === 'เก็บปลายทาง' ? 'เก็บปลายทาง' : 'รอชำระเงิน'
+          }
+        });
+        const orderId = r.id, total = r.total;
+        currentSubmittedOrderId = orderId;
+        localStorage.setItem('last_active_order_id', orderId);
+
+        document.getElementById('pay-order-id-display').innerText = `เลขที่ออเดอร์: ${orderId}`;
+        document.getElementById('pay-bank-name').innerText = billConfig.bankName || '-';
+        document.getElementById('pay-acc-name').innerText = billConfig.accName || '-';
+        document.getElementById('pay-acc-num').innerText = billConfig.accNum || '-';
+        document.getElementById('pay-pp-name').innerText = billConfig.promptpayName || '-';
+        document.getElementById('pay-pp-num').innerText = billConfig.promptpayNum || '-';
+        document.getElementById('qr-amount').innerText = total;
+        
+        const qrImgElem = document.getElementById('qr-image');
+        if (billConfig.qrImage) {
+          qrImgElem.src = billConfig.qrImage;
+        } else {
+          const ppNumClean = (billConfig.promptpayNum || '').replace(/[^0-9]/g, '');
+          qrImgElem.src = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=PROMPTPAY_${ppNumClean}_${total}`;
+        }
+
+        toggleCart();
+        document.getElementById('qr-modal').classList.remove('hidden');
+        cart = []; updateCartUI();
+
+        startPaymentCheck();
+      } catch(e) {
+        alert('ส่งออเดอร์ไม่สำเร็จ: ' + e.message);
+        if (/เข้าสู่ระบบ/.test(e.message)) sessionExpired();
+      }
+      finally { btn.innerText = "ยืนยันสั่งอาหาร"; btn.disabled = false; }
+    }
+
+    async function rateOrder(stars) {
+      if(!currentSubmittedOrderId) return; 
+      document.getElementById('rating-thanks').innerText = "กำลังบันทึกคะแนน..."; 
+      document.getElementById('rating-thanks').classList.remove('hidden');
+      
+      const starsHTML = Array(5).fill(0).map((_, i) => `<i class="fa-solid fa-star ${i<stars?'text-orange-500':'text-gray-300'}"></i>`).join('');
+      document.getElementById('star-container').innerHTML = starsHTML;
+      
+      try { 
+        await apiCall('rateOrder', { token: currentUser && currentUser.token, orderId: currentSubmittedOrderId, rating: stars });
+        document.getElementById('rating-thanks').innerText = "ขอบคุณที่ให้คะแนนครับ! 💖"; 
+      } catch(e) {
+        document.getElementById('rating-thanks').innerText = "บันทึกคะแนนไม่สำเร็จ: " + e.message;
+      }
+    }
+
+    function startPaymentCheck() {
+      if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+      
+      const checkStatusNow = async () => {
+        if (!currentSubmittedOrderId) return;
+        try {
+          const myOrd = await apiCall('orderStatus', { token: currentUser && currentUser.token, orderId: currentSubmittedOrderId });
+          
+          if (myOrd) {
+            document.getElementById('pay-order-id-display').innerText = `เลขที่ออเดอร์: ${myOrd.id}`;
+            
+            const payStatus = myOrd.payment || 'รอชำระเงิน';
+            const payBadge = document.getElementById('pay-status-badge');
+            
+            if (payStatus === 'ชำระเงินแล้ว' || payStatus === '🟢 ชำระแล้ว' || payStatus.includes('ยืนยัน')) {
+              payBadge.className = "inline-block px-3 py-1 bg-green-100 text-green-800 font-bold rounded-full text-xs";
+              payBadge.innerText = "สถานะการเงิน: 🟢 ชำระเงินเรียบร้อยแล้ว";
+              document.getElementById('payment-zone').classList.add('hidden');
+            } else if (payStatus === 'แจ้งโอนแล้ว') {
+              payBadge.className = "inline-block px-3 py-1 bg-blue-100 text-blue-800 font-bold rounded-full text-xs";
+              payBadge.innerText = "สถานะการเงิน: 🔵 แจ้งโอนแล้ว (รอแอดมินตรวจ)";
+            } else if (payStatus === 'เก็บปลายทาง' || payStatus.includes('ปลายทาง')) {
+              payBadge.className = "inline-block px-3 py-1 bg-emerald-100 text-emerald-800 font-bold rounded-full text-xs";
+              payBadge.innerText = "สถานะการเงิน: 💵 เตรียมเงินสดชำระปลายทาง";
+              document.getElementById('bank-details-box').style.display = 'none';
+              document.getElementById('qr-box').style.display = 'none';
+              document.getElementById('btn-notify-pay').style.display = 'none';
+            } else {
+              payBadge.className = "inline-block px-3 py-1 bg-amber-100 text-amber-800 font-bold rounded-full text-xs";
+              payBadge.innerText = "สถานะการเงิน: 🔴 รอชำระเงิน (โอนผ่าน QR)";
+              document.getElementById('bank-details-box').style.display = 'block';
+              document.getElementById('qr-box').style.display = '';
+              document.getElementById('btn-notify-pay').style.display = 'flex';
+            }
+
+            const kStatus = myOrd.status || 'กำลังรอ';
+            document.getElementById('kitchen-status-badge').innerText = kStatus;
+
+            const iconBox = document.getElementById('pay-status-icon');
+            const titleElem = document.getElementById('pay-status-title');
+
+            ['step-wait', 'step-cook', 'step-ship', 'step-done'].forEach(s => {
+              document.getElementById(s).className = "p-1.5 rounded-lg bg-gray-200 text-gray-500";
+            });
+
+            if (kStatus === 'กำลังรอ') {
+              document.getElementById('step-wait').className = "p-1.5 rounded-lg bg-amber-500 text-white font-bold";
+              iconBox.className = "w-14 h-14 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto text-2xl animate-pulse";
+              iconBox.innerHTML = `<i class="fa-solid fa-clock"></i>`;
+              titleElem.innerText = "ได้รับออเดอร์แล้ว (กำลังรอเข้าครัว)";
+            } else if (kStatus === 'กำลังทำ') {
+              document.getElementById('step-cook').className = "p-1.5 rounded-lg bg-orange-500 text-white font-bold";
+              iconBox.className = "w-14 h-14 bg-orange-100 text-orange-600 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce";
+              iconBox.innerHTML = `<i class="fa-solid fa-fire-burner"></i>`;
+              titleElem.innerText = "กำลังปรุงอาหารในครัว... 🍳";
+            } else if (kStatus === 'กำลังขนส่ง') {
+              document.getElementById('step-ship').className = "p-1.5 rounded-lg bg-blue-500 text-white font-bold";
+              iconBox.className = "w-14 h-14 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-2xl animate-bounce";
+              iconBox.innerHTML = `<i class="fa-solid fa-motorcycle"></i>`;
+              titleElem.innerText = "กำลังจัดส่งอาหาร / พร้อมเสิร์ฟ 🛵";
+            } else if (kStatus === 'เสร็จสิ้น') {
+              document.getElementById('step-done').className = "p-1.5 rounded-lg bg-green-500 text-white font-bold";
+              iconBox.className = "w-14 h-14 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto text-2xl";
+              iconBox.innerHTML = `<i class="fa-solid fa-circle-check"></i>`;
+              titleElem.innerText = "ออเดอร์เสร็จสิ้นเรียบร้อยแล้ว ขอบคุณครับ!";
+              
+              document.getElementById('payment-zone').classList.add('hidden');
+              document.getElementById('delivery-proof-box').classList.remove('hidden');
+
+              if(myOrd.deliveryPhoto) {
+                document.getElementById('delivery-photo-img').src = myOrd.deliveryPhoto;
+                document.getElementById('delivery-photo-img').classList.remove('hidden');
+              }
+
+              if(myOrd.rating) {
+                document.getElementById('star-container').innerHTML = `<p class="text-xs text-orange-600 font-bold">คุณให้คะแนนแล้ว: ${myOrd.rating} ดาว ⭐</p>`;
+                document.getElementById('rating-thanks').classList.remove('hidden');
+              }
+            }
+          }
+        } catch(e) {}
+      };
+
+      checkStatusNow();
+      paymentCheckInterval = setInterval(checkStatusNow, 8000);
+    }
+
+    function closePaymentModal() {
+      document.getElementById('qr-modal').classList.add('hidden');
+      if (paymentCheckInterval) clearInterval(paymentCheckInterval);
+    }
+
+    // 🌟 เมื่อโหลดหน้าเว็บ ให้ดึงข้อมูลจาก Cloud ทันที
+    window.onload = function() {
+      updateUIForAuth();
+      loadDataFromCloud(); 
+    };
+  </script>
+</body>
+</html>
